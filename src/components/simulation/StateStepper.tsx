@@ -39,6 +39,7 @@ export default function StateStepper({ contractAddress }: IProps) {
       //@ts-ignore
       state?._root.entries[0][1]?._root?.entries[2][1]?._root?.entries[0][1]
         ?._root?.entries;
+    if (!entries) return;
     setStepState(
       JSON.parse(
         `{\"${window.atob(entries[0][0])}\":${window.atob(entries[0][1])}}`
@@ -47,6 +48,7 @@ export default function StateStepper({ contractAddress }: IProps) {
   };
 
   const getRequestObject = (currentTrace: TraceLog) => {
+    if (!currentTrace) return;
     const { env, type, msg } = currentTrace;
     const responseObj = {
       env: env,
@@ -83,8 +85,7 @@ export default function StateStepper({ contractAddress }: IProps) {
   };
 
   return (
-    <Grid item sx={{ width: "100%"}}>
-
+    <Grid item sx={{ width: "100%" }}>
       <Stepper
         nonLinear
         activeStep={activeStep}
@@ -94,6 +95,7 @@ export default function StateStepper({ contractAddress }: IProps) {
         {trace?.map((infoObj, index: number) => {
           const { response } = infoObj;
           const request = getRequestObject(infoObj);
+          if (!request) return;
           const label = Object.keys(request.executeMsg)[0];
           return (
             <Step

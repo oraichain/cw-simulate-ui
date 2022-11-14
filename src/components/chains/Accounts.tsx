@@ -19,15 +19,18 @@ import { useNotification } from "../../atoms/snackbarNotificationState";
 import T1Container from "../grid/T1Container";
 import { useAtomValue } from "jotai";
 import cwSimulateAppState from "../../atoms/cwSimulateAppState";
-import { DEFAULT_TERRA_ADDRESS, DEFAULT_TERRA_FUNDS } from "../../configs/constants";
+import {
+  DEFAULT_ORAICHAIN_ADDRESS,
+  DEFAULT_ORAICHAIN_FUNDS,
+} from "../../configs/constants";
 import { Coin } from "@terran-one/cw-simulate/dist/types";
 import { validateAccountJSON } from "../../utils/fileUtils";
 import { useSetBalance } from "../../utils/simulationUtils";
 
 const DEFAULT_VALUE = JSON.stringify(
   {
-    sender: DEFAULT_TERRA_ADDRESS,
-    coins: DEFAULT_TERRA_FUNDS,
+    sender: DEFAULT_ORAICHAIN_ADDRESS,
+    coins: DEFAULT_ORAICHAIN_FUNDS,
   },
   null,
   2
@@ -38,7 +41,7 @@ const Accounts = () => {
   const [payload, setPayload] = useState(DEFAULT_VALUE);
   const setNotification = useNotification();
   const setBalance = useSetBalance();
-  const {app} = useAtomValue(cwSimulateAppState);
+  const { app } = useAtomValue(cwSimulateAppState);
   const accounts = app.bank.getBalances().toArray();
   const handleClickOpen = () => {
     setOpenDialog(true);
@@ -49,7 +52,9 @@ const Accounts = () => {
     return {
       id: account[0],
       address: account[0],
-      balances: account[1].map((c: Coin) => `${c.amount} ${c.denom}`).join(", "),
+      balances: account[1]
+        .map((c: Coin) => `${c.amount} ${c.denom}`)
+        .join(", "),
     };
   });
 
@@ -61,7 +66,7 @@ const Accounts = () => {
     const json = JSON.parse(payload);
 
     if (payload.length === 0 || !validateAccountJSON(json)) {
-      setNotification("Invalid Account JSON", {severity: "error"});
+      setNotification("Invalid Account JSON", { severity: "error" });
       return;
     }
 
@@ -87,7 +92,7 @@ const Accounts = () => {
 
   return (
     <>
-      <Grid item container sx={{mb: 2}}>
+      <Grid item container sx={{ mb: 2 }}>
         <Grid item flex={1}>
           <Typography variant="h6">Accounts</Typography>
         </Grid>
@@ -111,7 +116,7 @@ const Accounts = () => {
                   onClick={() => handleDeleteAccount(props.row.address)}
                 >
                   <ListItemIcon>
-                    <DeleteIcon fontSize="small"/>
+                    <DeleteIcon fontSize="small" />
                   </ListItemIcon>
                   <ListItemText>Delete</ListItemText>
                 </MenuItem>
@@ -126,7 +131,7 @@ const Accounts = () => {
           <DialogContentText>
             Enter account address and balance.
           </DialogContentText>
-          <T1Container sx={{width: 400, height: 220}}>
+          <T1Container sx={{ width: 400, height: 220 }}>
             <JsonCodeMirrorEditor
               jsonValue={DEFAULT_VALUE}
               setPayload={handleSetPayload}
