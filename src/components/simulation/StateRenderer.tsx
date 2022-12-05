@@ -1,115 +1,76 @@
-import React, { Component } from "react";
-import StateResponseTab from "./StateResponseTab";
-import { OutputCard } from "./OutputCard";
+import styled from "@mui/material/styles/styled";
 import { Grid } from "@mui/material";
-import { useAtom, useAtomValue } from "jotai";
-import {
-  stateResponseTabState,
-  stepResponseState,
-  stepRequestState,
-  compareStates,
-  stepTraceState,
-  blockState,
-} from "../../atoms/simulationPageAtoms";
-import { StateTab } from "./StateTab";
-import { SummaryTab, ResponseTab, LogsTab } from "./InspectorTabs";
+import { useAtomValue } from "jotai";
+import React, { PropsWithChildren } from "react";
+import { isDiffOpenState, stepTraceState } from "../../atoms/simulationPageAtoms";
 import T1Container from "../grid/T1Container";
-import { useTheme } from "../../configs/theme";
+import { T1Tab, T1Tabs } from "../T1Tabs";
+import LogsTab from "./tabs/LogsTab";
+import ResponseTab from "./tabs/ResponseTab";
+import SummaryTab from "./tabs/SummaryTab";
+import { StateTab } from "./tabs/StateTab";
+import QueryTab from "./tabs/QueryTab";
+import CloseDiff from "./CloseDiff";
 
 interface IProps {
-  isFileUploaded: boolean;
+  contractAddress: string;
 }
 
-export const StateRenderer = ({ isFileUploaded }: IProps) => {
-  const [currentTab, setCurrentTab] = useAtom(stateResponseTabState);
-  const compareStateObj = useAtomValue(compareStates);
-  const [isVisible, setIsVisible] = React.useState(false);
-  const response = useAtomValue(stepResponseState);
-  const request = useAtomValue(stepRequestState);
-  const currentJSON = useAtomValue(blockState);
+export const StateRenderer = ({ contractAddress }: IProps) => {
   const stepTrace = useAtomValue(stepTraceState);
-  const muiTheme = useTheme();
-  React.useEffect(() => {
-    if (compareStateObj.state1 != "" && compareStateObj.state2 != "")
-      setIsVisible(true);
-  }, [compareStateObj]);
-
-  let renderedTab;
-
-  switch (currentTab) {
-    case "summary":
-      renderedTab = <SummaryTab traceLog={stepTrace} />;
-      break;
-    case "response":
-      renderedTab = <ResponseTab traceLog={stepTrace} />;
-      break;
-    case "logs":
-      renderedTab = <LogsTab traceLog={stepTrace} />;
-      break;
-    default:
-      renderedTab = <LogsTab traceLog={stepTrace} />;
-  }
+  const isDiffOpen = useAtomValue(isDiffOpenState);
 
   return (
-    <Grid container height="100%">
-      <Grid
-        item
-        container
-        direction="column"
-        height="100%"
-        width="50%"
-        gap={2}
-        flexWrap="nowrap"
-      >
-        <Grid item>
-          <StateResponseTab
-            currentTab={currentTab}
-            setCurrentTab={setCurrentTab}
-          />
-        </Grid>
-        <Grid item flex={1}>
-          <T1Container
-            sx={{
-              border: `1px solid ${muiTheme.palette.line}`,
-              textAlign: "left",
-              "> .T1Container-content": {
-                p: 1,
-              },
-            }}
-          >
-            {renderedTab}
-          </T1Container>
-        </Grid>
-      </Grid>
-      <Grid
-        item
-        container
-        direction="column"
-        height="100%"
-        width="50%"
-        gap={2}
-        flexWrap="nowrap"
-        sx={{ pl: 1 }}
-      >
-        <Grid item>
-          <StateTab isVisible={isVisible} setIsVisible={setIsVisible} />
-        </Grid>
-        <Grid item flex={1}>
-          {isVisible ? (
-            <OutputCard
-              beforeState={compareStateObj.state1}
-              afterState={compareStateObj.state2}
-              isVisible={isVisible}
-              placeholder="Your state diff will appear here."
-            />
-          ) : (
-            <OutputCard
-              response={currentJSON}
-              placeholder="Your state will appear here."
-            />
-          )}
-        </Grid>
-      </Grid>
+    <Grid container height="100%" gap={1}>
+      <Half>
+        <T1Tabs ContentContainer={Content}>
+          <T1Tab label="Summary">
+            <SummaryTab traceLog={stepTrace} />
+          </T1Tab>
+          <T1Tab label="Response">
+            <ResponseTab traceLog={stepTrace} />
+          </T1Tab>
+          <T1Tab label="Logs">
+            <LogsTab traceLog={stepTrace} />
+          </T1Tab>
+        </T1Tabs>
+      </Half>
+      <Half>
+        <T1Tabs
+          ContentContainer={Content}
+          right={isDiffOpen && <CloseDiff />}
+        >
+          <T1Tab label="State">
+            <StateTab />
+          </T1Tab>
+          <T1Tab label="Query">
+            <QueryTab contractAddress={contractAddress} />
+          </T1Tab>
+        </T1Tabs>
+      </Half>
     </Grid>
   );
 };
+
+function Half({ children }: PropsWithChildren) {
+  return (
+    <Grid
+      item
+      container
+      direction="column"
+      height="100%"
+      flex={1}
+      gap={2}
+      flexWrap="nowrap"
+    >
+      {children}
+    </Grid>
+  );
+}
+
+const Content = styled(T1Container)(({ theme }) => ({
+  border: `1px solid ${theme.palette.line}`,
+  "> .T1Container-content": {
+    padding: theme.spacing(1),
+  },
+}));

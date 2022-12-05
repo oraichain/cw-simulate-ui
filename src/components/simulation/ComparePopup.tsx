@@ -1,20 +1,31 @@
-import { Grid, Button, Popover, TextField, Typography } from "@mui/material";
-import DifferenceOutlinedIcon from "@mui/icons-material/DifferenceOutlined";
-import React from "react";
-import { useAtom } from "jotai";
 import {
-  compareStates,
-  stateResponseTabState,
-} from "../../atoms/simulationPageAtoms";
-import { TraceLog } from "@terran-one/cw-simulate";
-
+  Grid,
+  Button,
+  Popover,
+  TextField,
+  Typography,
+  Autocomplete,
+  AutocompleteRenderInputParams,
+} from "@mui/material";
+import React, { useState } from "react";
+import { useAtom } from "jotai";
+import { compareStates } from "../../atoms/simulationPageAtoms";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
+import useSimulation from "../../hooks/useSimulation";
+import { useContractTrace } from "../../CWSimulationBridge";
+import { useParams } from "react-router-dom";
+import { useTheme } from "../../configs/theme";
+import { extractState } from "./StateStepper";
 interface IProps {
-  currentActiveState: number;
-  trace: TraceLog[];
+  currentActiveStep: number;
 }
-export const ComparePopup = ({ currentActiveState, trace }: IProps) => {
+export const ComparePopup = ({ currentActiveStep }: IProps) => {
   const [_, setCompareStates] = useAtom(compareStates);
-  const [__, setStateResponseTab] = useAtom(stateResponseTabState);
+  const { instanceAddress: contractAddress } = useParams();
+  const [compareWith, setCompareWith] = useState<string>();
+  const sim = useSimulation();
+  const muiTheme = useTheme();
+  const traces = useContractTrace(sim, contractAddress!);
   const [error, setError] = React.useState("");
   const [anchorEl, setAnchorEl] =
     React.useState<HTMLButtonElement | null>(null);
@@ -25,33 +36,38 @@ export const ComparePopup = ({ currentActiveState, trace }: IProps) => {
   const handleDiffClose = () => {
     setAnchorEl(null);
   };
-  const getStateString = (stateObj: any) => {
-    const entries =
-      stateObj?._root.entries[0][1]?._root?.entries[2][1]?._root?.entries[0][1]
-        ?._root?.entries;
-    return window.atob(entries[0][1]);
-  };
+
   const open = Boolean(anchorEl);
   const id = open ? "simple-popover" : undefined;
-  const keyDownHandler = (e: any) => {
-    if (e.key == "Enter") {
-      const toCompareState = e.target.value;
-      if (toCompareState > trace.length || toCompareState < 0) {
-        setError("Invalid State");
-        return;
-      }
-      setCompareStates({
-        state1: getStateString(trace[currentActiveState].storeSnapshot),
-        state2: getStateString(trace[e.target.value - 1].storeSnapshot),
-      });
-      setError("");
-      e.preventDefault();
+  const onChangeHandler = (value: string) => {
+    const toCompareState = Number(value);
+    if (toCompareState > traces.length || toCompareState < 0) {
+      setError("Invalid State");
+      return;
     }
+
+    setCompareStates({
+      state1: extractState(
+        traces[currentActiveStep].storeSnapshot,
+        contractAddress!
+      ),
+      state2: extractState(
+        traces[toCompareState - 1].storeSnapshot,
+        contractAddress!
+      ),
+    });
+    setCompareWith(value);
+    setError("");
   };
+
   return (
     <Grid>
-      <Button aria-describedby={id} onClick={handleDiffClick}>
-        <DifferenceOutlinedIcon sx={{ height: "0.8em" }} />
+      <Button
+        aria-describedby={id}
+        onClick={handleDiffClick}
+        sx={{ color: `${muiTheme.palette.text.primary}` }}
+      >
+        <MoreVertIcon />
       </Button>
       <Popover
         id={id}
@@ -63,17 +79,38 @@ export const ComparePopup = ({ currentActiveState, trace }: IProps) => {
           horizontal: "left",
         }}
         sx={{
-          "& .css-3bmhjh-MuiPaper-root-MuiPopover-paper": {
-            boxShadow: "rgba(149, 157, 165, 0.2) 0px 4px 4px",
+          "& .MuiPopover-paper ": {
+            boxShadow: "rgba(149, 157, 165, 0.2) 0px 4px 4px !important",
+          },
+          "& .MuiInputLabel-root.Mui-focused": {
+            color: "#6b5f5f",
           },
         }}
       >
         <Grid item sx={{ p: 1 }}>
-          <TextField
-            id="compare-states"
-            label="Compare with State number"
-            variant="standard"
-            onKeyPress={(e) => keyDownHandler(e)}
+          <Autocomplete
+            onInputChange={(_, value) =>
+              value.length > 0 && onChangeHandler(value)
+            }
+            sx={{
+              width: "10vw",
+            }}
+            renderInput={(params: AutocompleteRenderInputParams) => (
+              <TextField
+                {...params}
+                label="Compare with other parent"
+                sx={{
+                  "&  .MuiOutlinedInput-notchedOutline": {
+                    borderColor: "#6b5f5f !important",
+                  },
+                }}
+              />
+            )}
+            options={[
+              ...[...Array(traces.length + 1).keys()]
+                .filter((ele) => ele !== currentActiveStep + 1 && ele !== 0)
+                .map((ele) => `${ele}`),
+            ]}
           />
         </Grid>
         {error && (

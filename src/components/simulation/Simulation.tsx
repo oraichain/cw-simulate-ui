@@ -1,44 +1,53 @@
-import Box from "@mui/material/Box";
-import Collapse from "@mui/material/Collapse";
 import Divider from "@mui/material/Divider";
 import Grid from "@mui/material/Grid";
 import Paper from "@mui/material/Paper";
-import Typography from "@mui/material/Typography";
 import type { Theme } from "@mui/material/styles/createTheme";
 import styled from "@mui/material/styles/styled";
 import useTheme from "@mui/material/styles/useTheme";
 import type { SxProps } from "@mui/system/styleFunctionSx";
-import React, { ReactNode, useState } from "react";
+import React, { ReactNode } from "react";
 import { useParams } from "react-router-dom";
-import { useAtomValue, useSetAtom } from "jotai";
-import { fileUploadedState } from "../../atoms/fileUploadedState";
-import { responseState } from "../../atoms/simulationPageAtoms";
+import { joinSx } from "../../utils/reactUtils";
 import { GridSizeProps } from "../../utils/typeUtils";
 import T1Container from "../grid/T1Container";
-import { ExecuteQuery } from "./ExecuteQuery";
+import Executor from "./Executor";
 import { StateRenderer } from "./StateRenderer";
 import StateStepper from "./StateStepper";
-import CollapsibleIcon from "../CollapsibleIcon";
-import { workerData } from "worker_threads";
+import Address from "../chains/Address";
 
-const StyledPaper = styled(Paper)(({theme}) => ({
+const StyledPaper = styled(Paper)(({ theme }) => ({
   ...theme.typography.body2,
   padding: theme.spacing(1),
 }));
 
 const Simulation = () => {
-  const {instanceAddress: contractAddress} = useParams();
-  const isFileUploaded = useAtomValue(fileUploadedState);
+  const contractAddress = useParams().instanceAddress!;
+
   return (
     <SplitView className="T1Simulation-root">
       <Column xs={4} className="T1Simulation-left">
-        <CollapsibleExecuteQuery contractAddress={contractAddress!}/>
-        <Divider sx={{my: 1}}/>
-        <StateStepper contractAddress={contractAddress!}/>
+        <Grid container direction="column" height="100%">
+          <Grid item>
+            <Address
+              address={contractAddress}
+              gutterBottom
+              fontWeight="bold"
+              textAlign="center"
+              sx={{ display: 'flex', justifyContent: 'center' }}
+            />
+            <Executor contractAddress={contractAddress} />
+          </Grid>
+          <Divider sx={{ my: 1 }} />
+          <Grid item flex={1} sx={{ display: "relative" }}>
+            <T1Container>
+              <StateStepper contractAddress={contractAddress} />
+            </T1Container>
+          </Grid>
+        </Grid>
       </Column>
       <Column xs={8} className="T1Simulation-right">
         <Widget>
-          <StateRenderer isFileUploaded={isFileUploaded}/>
+          <StateRenderer contractAddress={contractAddress} />
         </Widget>
       </Column>
     </SplitView>
@@ -52,7 +61,7 @@ interface ISplitViewProps {
   className?: string;
 }
 
-function SplitView({children, ...props}: ISplitViewProps) {
+function SplitView({ children, ...props }: ISplitViewProps) {
   return (
     <Grid
       container
@@ -73,7 +82,7 @@ interface IColumnProps extends GridSizeProps {
   className?: string;
 }
 
-function Column({children, ...props}: IColumnProps) {
+function Column({ children, ...props }: IColumnProps) {
   const theme = useTheme();
 
   return (
@@ -120,58 +129,18 @@ function Widget({
   return (
     <Grid
       item
-      sx={[
+      sx={joinSx(
         {
           p: 2,
           height: `${(100 * size) / 12}%`,
           overflow: "auto",
         },
-        ...(Array.isArray(sx) ? sx : [sx]),
-      ]}
+        sx
+      )}
       className={`T1Widget-root ${className}`}
       {...props}
     >
       <T1Container>{children}</T1Container>
     </Grid>
-  );
-}
-
-interface ICollapsibleExecuteQueryProps {
-  contractAddress: string;
-}
-
-function CollapsibleExecuteQuery({
-  contractAddress,
-}: ICollapsibleExecuteQueryProps) {
-  const theme = useTheme();
-  const setResponse = useSetAtom(responseState);
-  const [showExecuteQuery, setShowExecuteQuery] = useState(true);
-
-  return (
-    <Box sx={{borderRadius: 1, overflow: "hidden", pb: 0.5}}>
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          background: theme.palette.common.black,
-          color: theme.palette.common.white,
-          cursor: "pointer",
-          py: 0.5,
-          px: 1,
-        }}
-        onClick={() => setShowExecuteQuery((curr) => !curr)}
-      >
-        <CollapsibleIcon expanded={showExecuteQuery}/>
-        <Typography sx={{fontSize: "1.1rem"}}>Execute</Typography>
-      </Box>
-      <Collapse in={showExecuteQuery}>
-        <Box sx={{height: 280}}>
-          <ExecuteQuery
-            setResponse={setResponse}
-            contractAddress={contractAddress!}
-          />
-        </Box>
-      </Collapse>
-    </Box>
   );
 }

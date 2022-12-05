@@ -1,5 +1,4 @@
-import { useAtom } from "jotai";
-import cwSimulateAppState from "../../atoms/cwSimulateAppState";
+import { useSetAtom } from "jotai";
 import SubMenuHeader from "./SubMenuHeader";
 import {
   Box,
@@ -14,8 +13,10 @@ import {
 } from "@mui/material";
 import React, { ChangeEvent, ReactNode, useState } from "react";
 import { useNotification } from "../../atoms/snackbarNotificationState";
-import { CWSimulateApp } from "@terran-one/cw-simulate";
-import { OraichainConfig } from "../../configs/constants";
+import { defaults } from "../../configs/constants";
+import { useNavigate } from "react-router-dom";
+import { stepTraceState } from "../../atoms/simulationPageAtoms";
+import useSimulation from "../../hooks/useSimulation";
 
 export interface ISettingsSubMenuProps {}
 
@@ -25,24 +26,34 @@ interface IChainConfigFormValues {
 }
 
 export default function SettingsSubMenu(props: ISettingsSubMenuProps) {
-  const [{ app }, setSimulateApp] = useAtom(cwSimulateAppState);
+  const sim = useSimulation();
+  const setNotification = useNotification();
+  const navigate = useNavigate();
+
   const [chainConfigFormValues, setChainConfigFormValues] =
     useState<IChainConfigFormValues>({} as IChainConfigFormValues);
-  const setNotification = useNotification();
   const [openResetSimulationDialog, setOpenResetSimulationDialog] =
     useState(false);
+  const setStepTrace = useSetAtom(stepTraceState);
+
   const handleResetSimulation = (e: any) => {
-    setSimulateApp({
-      app: new CWSimulateApp(OraichainConfig),
-    });
+    sim.recreate(defaults.chains.orai);
     setOpenResetSimulationDialog(false);
+    navigate("/accounts");
   };
+  setStepTrace(undefined);
 
   const handleSaveConfig = () => {
-    app.chainId = chainConfigFormValues.chainId;
-    app.bech32Prefix = chainConfigFormValues.bech32Prefix;
-    setSimulateApp({ app });
-    setNotification("Chain config saved successfully");
+    const { chainId, bech32Prefix } = chainConfigFormValues;
+    try {
+      sim.updateChainConfig(chainId, bech32Prefix);
+      setNotification("Chain config saved successfully");
+    } catch (err: any) {
+      console.error(err);
+      setNotification("Something went wrong while reconfiguring chain.", {
+        severity: "error",
+      });
+    }
   };
 
   const handleOnChangeChainConfig = (e: ChangeEvent<HTMLTextAreaElement>) => {
@@ -50,44 +61,40 @@ export default function SettingsSubMenu(props: ISettingsSubMenuProps) {
     setChainConfigFormValues({ ...chainConfigFormValues, [name]: value });
   };
 
-  const handleClose = () => {
-    setOpenResetSimulationDialog(false);
-  };
-
   return (
     <>
       <SubMenuHeader title="Settings" />
-      <SettingSubMenu title={"Chain Configuration"}>
+      <SettingSubMenu title="Chain Configuration">
         <TextField
           sx={{ width: "90%" }}
-          helperText={"Chain Id"}
+          helperText="Chain ID"
           id="chainId"
-          defaultValue={app.chainId}
-          variant={"standard"}
-          name={"chainId"}
+          defaultValue={sim.chainId}
+          variant="standard"
+          name="chainId"
           onChange={handleOnChangeChainConfig}
         />
         <TextField
           sx={{ width: "90%" }}
-          helperText={"Bech32 Prefix"}
+          helperText="Bech32 Prefix"
           id="bech32Prefix"
-          variant={"standard"}
-          name={"bech32Prefix"}
-          defaultValue={app.bech32Prefix}
+          variant="standard"
+          name="bech32Prefix"
+          defaultValue={sim.bech32Prefix}
           onChange={handleOnChangeChainConfig}
         />
         <Button
           sx={{ width: "90%" }}
           onClick={handleSaveConfig}
-          variant={"contained"}
+          variant="contained"
         >
           Save
         </Button>
       </SettingSubMenu>
-      <SettingSubMenu title={"Simulation"}>
+      <SettingSubMenu title="Simulation">
         <Button
           sx={{ width: "90%" }}
-          variant={"contained"}
+          variant="contained"
           onClick={() => setOpenResetSimulationDialog(true)}
         >
           Reset Simulation

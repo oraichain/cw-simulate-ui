@@ -9,85 +9,43 @@ import {
   ListItemIcon,
   ListItemText,
   MenuItem,
+  TextField,
   Typography,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
-import TableLayout from "./TableLayout";
-import React, { useState } from "react";
-import { JsonCodeMirrorEditor } from "../JsonCodeMirrorEditor";
-import { useNotification } from "../../atoms/snackbarNotificationState";
-import T1Container from "../grid/T1Container";
-import { useAtomValue } from "jotai";
-import cwSimulateAppState from "../../atoms/cwSimulateAppState";
-import {
-  DEFAULT_ORAICHAIN_ADDRESS,
-  DEFAULT_ORAICHAIN_FUNDS,
-} from "../../configs/constants";
 import { Coin } from "@terran-one/cw-simulate/dist/types";
-import { validateAccountJSON } from "../../utils/fileUtils";
-import { useSetBalance } from "../../utils/simulationUtils";
+import React, { useCallback, useRef, useState } from "react";
+import { useNotification } from "../../atoms/snackbarNotificationState";
+import { defaults } from "../../configs/constants";
+import { useAccounts } from "../../CWSimulationBridge";
+import useSimulation from "../../hooks/useSimulation";
+import { stringifyFunds } from "../../utils/typeUtils";
+import T1Container from "../grid/T1Container";
+import TableLayout from "./TableLayout";
+import Funds from "../Funds";
+import Address from "./Address";
 
-const DEFAULT_VALUE = JSON.stringify(
-  {
-    sender: DEFAULT_ORAICHAIN_ADDRESS,
-    coins: DEFAULT_ORAICHAIN_FUNDS,
-  },
-  null,
-  2
-);
+const getDefaultAccount = (chainId: string) =>
+  Object.values(defaults.chains).find((config) => config.chainId === chainId) ??
+  defaults.chains.orai;
 
 const Accounts = () => {
-  const [openDialog, setOpenDialog] = useState(false);
-  const [payload, setPayload] = useState(DEFAULT_VALUE);
+  const sim = useSimulation();
+  const accounts = Object.entries(useAccounts(sim));
   const setNotification = useNotification();
-  const setBalance = useSetBalance();
-  const { app } = useAtomValue(cwSimulateAppState);
-  const accounts = app.bank.getBalances().toArray();
-  const handleClickOpen = () => {
-    setOpenDialog(true);
-    setPayload(DEFAULT_VALUE);
-  };
 
-  const data = accounts.map((account) => {
+  const [openAddDialog, setOpenAddDialog] = useState(false);
+
+  const data = accounts.map(([address, balances]) => {
     return {
-      id: account[0],
-      address: account[0],
-      balances: account[1]
-        .map((c: Coin) => `${c.amount} ${c.denom}`)
-        .join(", "),
+      address: <Address address={address} long />,
+      balances: balances.map((c: Coin) => `${c.amount} ${c.denom}`).join(", "),
     };
   });
 
-  const handleClose = () => {
-    setOpenDialog(false);
-  };
-
-  const handleAddAccount = () => {
-    const json = JSON.parse(payload);
-
-    if (payload.length === 0 || !validateAccountJSON(json)) {
-      setNotification("Invalid Account JSON", { severity: "error" });
-      return;
-    }
-
-    if (accounts.find((acc: [string, Coin[]]) => acc[0] === json.address)) {
-      setNotification("An account with this address already exists", {
-        severity: "error",
-      });
-      return;
-    }
-
-    setBalance(json.sender, json.coins);
-    setNotification("Account added successfully");
-    setOpenDialog(false);
-  };
-
   const handleDeleteAccount = (address: string) => {
+    sim.deleteBalance(address);
     setNotification("Account successfully removed");
-  };
-
-  const handleSetPayload = (payload: string) => {
-    setPayload(payload);
   };
 
   return (
@@ -97,7 +55,7 @@ const Accounts = () => {
           <Typography variant="h6">Accounts</Typography>
         </Grid>
         <Grid item>
-          <Button variant="contained" onClick={handleClickOpen}>
+          <Button variant="contained" onClick={() => setOpenAddDialog(true)}>
             New Account
           </Button>
         </Grid>
@@ -106,6 +64,7 @@ const Accounts = () => {
         <T1Container>
           <TableLayout
             rows={data}
+            keyField="address"
             columns={{
               address: "Account Address",
               balances: "Balances",
@@ -113,7 +72,9 @@ const Accounts = () => {
             RowMenu={(props) => (
               <>
                 <MenuItem
-                  onClick={() => handleDeleteAccount(props.row.address)}
+                  onClick={() =>
+                    handleDeleteAccount(props.row.address.props.address)
+                  }
                 >
                   <ListItemIcon>
                     <DeleteIcon fontSize="small" />
@@ -125,26 +86,96 @@ const Accounts = () => {
           />
         </T1Container>
       </Grid>
-      <Dialog open={openDialog} onClose={handleClose}>
-        <DialogTitle>Add New Account</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Enter account address and balance.
-          </DialogContentText>
-          <T1Container sx={{ width: 400, height: 220 }}>
-            <JsonCodeMirrorEditor
-              jsonValue={DEFAULT_VALUE}
-              setPayload={handleSetPayload}
-            />
-          </T1Container>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClose}>Cancel</Button>
-          <Button onClick={handleAddAccount}>Add</Button>
-        </DialogActions>
-      </Dialog>
+      <AddAccountDialog
+        open={openAddDialog}
+        onClose={() => setOpenAddDialog(false)}
+      />
     </>
   );
 };
 
 export default Accounts;
+
+interface DialogProps {
+  open: boolean;
+  onClose(): void;
+}
+
+function AddAccountDialog({ open, onClose }: DialogProps) {
+  const sim = useSimulation();
+  const accounts = Object.entries(useAccounts(sim));
+  const defaultAccount = getDefaultAccount(sim.chainId);
+
+  const refAddress = useRef<HTMLInputElement | null>(null);
+  const [address, setAddress] = useState(defaultAccount.sender);
+  const [funds, setFunds] = useState<Coin[]>(defaultAccount.funds);
+  const [isFundsValid, setFundsValid] = useState(true);
+
+  const setNotification = useNotification();
+
+  const handleChangeAddress = useCallback(() => {
+    if (refAddress.current) setAddress(refAddress.current.value);
+  }, []);
+
+  const addAccount = useCallback(() => {
+    if (!funds.length) {
+      setNotification("Please specify funds for the new account.", {
+        severity: "error",
+      });
+      return;
+    }
+
+    if (!isFundsValid) {
+      setNotification(
+        "Invalid funds. Please see the message underneath funds input.",
+        { severity: "error" }
+      );
+      return;
+    }
+
+    if (accounts.find(([addr]) => addr === address)) {
+      setNotification("An account with this address already exists", {
+        severity: "error",
+      });
+      return;
+    }
+
+    sim.setBalance(address, funds);
+    setNotification("Account added successfully");
+    onClose();
+  }, [accounts, address, funds, isFundsValid]);
+
+  const valid = isFundsValid && !!funds.length;
+
+  return (
+    <Dialog open={open} onClose={onClose}>
+      <DialogTitle>Add New Account</DialogTitle>
+      <DialogContent sx={{ minWidth: 380 }}>
+        <TextField
+          inputRef={refAddress}
+          label="Address"
+          defaultValue={defaultAccount.sender}
+          onChange={handleChangeAddress}
+          sx={{ width: "100%", my: 2 }}
+        />
+        <Funds
+          onChange={setFunds}
+          onValidate={setFundsValid}
+          hideError={!funds.length}
+          defaultValue={stringifyFunds(defaultAccount.funds)}
+        />
+        {!funds.length && (
+          <DialogContentText color="red" fontStyle="italic">
+            Please enter funds.
+          </DialogContentText>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={addAccount} disabled={!valid}>
+          Add
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}

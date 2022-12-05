@@ -1,8 +1,7 @@
 import { Box } from "@mui/material";
-import React, { ComponentProps, ComponentType } from "react";
+import React from "react";
 import { JSONTree } from "react-json-tree";
 import { useTheme } from "../configs/theme";
-import type { Defined } from "../utils/typeUtils";
 
 const theme = {
   scheme: "chalk",
@@ -29,19 +28,21 @@ export interface IT1JsonTreeProps {
   data: any;
 }
 
-const T1JsonTree = React.memo(({ data }: IT1JsonTreeProps) => {
+const T1JsonTree = React.memo(({data}: IT1JsonTreeProps) => {
   const muiTheme = useTheme();
-  
+
   return (
     <Box sx={{
       '& > *': {
         background: 'transparent !important',
-      }
+      },
+      fontFamily: 'JetBrains Mono'
     }}>
       <JSONTree
         data={data}
         theme={theme}
         invertTheme={muiTheme.palette.mode === 'dark'}
+        shouldExpandNode={() => true}
       />
     </Box>
   )

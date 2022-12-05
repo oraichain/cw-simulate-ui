@@ -1,6 +1,6 @@
-import { ComponentType, useId, useMemo, useRef, useState } from "react";
+import { ComponentType, ReactNode, useId, useMemo, useRef, useState } from "react";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
-import { styled } from "@mui/material/styles";
+import { styled, SxProps } from "@mui/material/styles";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableCell, { tableCellClasses } from "@mui/material/TableCell";
@@ -9,14 +9,22 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Paper from "@mui/material/Paper";
 import { IconButton, Menu } from "@mui/material";
+import { Theme } from "@mui/system";
 
-const StyledTableCell = styled(TableCell)(({ theme }) => ({
+interface IStyledTableCellProps {
+  inspectorTable?: boolean;
+}
+
+const StyledTableCell = styled(TableCell)<IStyledTableCellProps>(({ theme, inspectorTable }) => ({
   [`&.${tableCellClasses.head}`]: {
     backgroundColor: theme.palette.common.black,
     color: theme.palette.common.white,
+    fontWeight: inspectorTable ? 'bold' : undefined,
+    padding: inspectorTable ? theme.spacing(1) : undefined,
   },
   [`&.${tableCellClasses.body}`]: {
     fontSize: 14,
+    padding: inspectorTable ? theme.spacing(1) : undefined,
   },
 }));
 
@@ -33,6 +41,7 @@ const StyledTableRow = styled(TableRow)(({ theme }) => ({
 export type ITableLayoutProps<T extends DataSet> = {
   RowMenu?: ComponentType<ITableLayoutRowMenuProps<T>>;
   inspectorTable?: boolean;
+  sx?: SxProps<Theme>;
 } & (
   | {
       rows: T[];
@@ -52,7 +61,7 @@ export interface ITableLayoutRowMenuProps<T extends DataSet> {
 }
 
 type DataSet = {
-  [key: PropertyKey]: string;
+  [key: PropertyKey]: ReactNode;
 };
 
 /** Mapping from keys of T to display values/labels. */
@@ -63,8 +72,12 @@ type ColumnMap<T extends DataSet> = {
 export default function TableLayout<T extends DataSet>(
   props: ITableLayoutProps<T>
 ) {
-  const { rows, columns, RowMenu, inspectorTable } = props;
+  const { rows, columns, RowMenu, inspectorTable, sx } = props;
   const keyField = "keyField" in props ? props.keyField : ("id" as keyof T);
+  
+  if (rows.find(row => typeof row[keyField] !== 'string')) {
+    console.warn(`TableLayout keyField ${keyField.toString()} is not a string and will likely cause issues. To avoid this warning, extract a string key from the field.`);
+  }
 
   const keys = useMemo(
     () => Object.keys(columns) as (keyof T & string)[],
@@ -73,22 +86,20 @@ export default function TableLayout<T extends DataSet>(
   const labels = useMemo(() => Object.values(columns) as string[], [columns]);
 
   return (
-    <TableContainer component={Paper}>
+    <TableContainer component={Paper} sx={sx}>
       <Table sx={{ width: "100%" }} aria-label="customized table">
         <TableHead>
           <TableRow>
             {[
-              ...labels.map((label, idx) =>
-                inspectorTable ? (
-                  <TableCell align="center" sx={{ fontWeight: "bold" }}>
-                    {label}
-                  </TableCell>
-                ) : (
-                  <StyledTableCell key={keys[idx]} align="center">
-                    {label}
-                  </StyledTableCell>
-                )
-              ),
+              ...labels.map((label, idx) => (
+                <StyledTableCell
+                  key={keys[idx]}
+                  align="center"
+                  inspectorTable={inspectorTable}
+                >
+                  {label}
+                </StyledTableCell>
+              )),
               ...(RowMenu ? [<StyledTableCell key="t1rowmenu" />] : []),
             ]}
           </TableRow>
@@ -103,7 +114,7 @@ export default function TableLayout<T extends DataSet>(
                 keys,
                 RowMenu,
               }}
-              key={row[keyField]}
+              key={`${row[keyField]}`}
               inspectorTable={inspectorTable}
             />
           ))}
@@ -132,15 +143,9 @@ function T1TableRow<T extends DataSet>(props: T1TableRowProps<T>) {
   return (
     <StyledTableRow>
       {keys.map((key) =>
-        inspectorTable ? (
-          <TableCell align="center" sx={{ p: 1 }}>
-            {row[key]}
-          </TableCell>
-        ) : (
-          <StyledTableCell align="center" component="th" scope="row" key={key}>
-            {row[key]}
-          </StyledTableCell>
-        )
+        <StyledTableCell key={key} align="center" component="th" scope="row" inspectorTable>
+          {row[key]}
+        </StyledTableCell>
       )}
       {RowMenu && (
         <StyledTableCell align="center" component="th" scope="row">

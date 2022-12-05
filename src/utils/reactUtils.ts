@@ -1,4 +1,6 @@
 import type { SxProps } from "@mui/system/styleFunctionSx";
+import { useCallback } from "react";
+import { useNotification } from "../atoms/snackbarNotificationState";
 import type { Falsy } from "./typeUtils";
 
 export function joinSx<T extends {}>(...sxs: (SxProps<T> | Falsy)[]): SxProps<T> {
@@ -13,4 +15,12 @@ export function joinSx<T extends {}>(...sxs: (SxProps<T> | Falsy)[]): SxProps<T>
     }
   }
   return result;
+}
+
+export function isChildOf(root: HTMLElement, child: HTMLElement | Falsy, log = false): boolean {
+  let curr = child;
+  while (curr && curr !== root) {
+    curr = curr.parentElement;
+  }
+  return curr === root;
 }

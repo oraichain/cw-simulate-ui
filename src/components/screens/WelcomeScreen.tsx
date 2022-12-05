@@ -1,118 +1,162 @@
 import useTheme from "@mui/material/styles/useTheme";
-import { Box, Grid, SvgIcon, Typography } from "@mui/material";
+import {
+  Autocomplete,
+  AutocompleteRenderInputParams,
+  Box,
+  Button,
+  Grid,
+  SvgIcon,
+  TextField,
+  Typography,
+} from "@mui/material";
 import React, {
-  HTMLAttributeAnchorTarget,
+  ComponentType,
+  MouseEvent,
   PropsWithChildren,
   useCallback,
   useEffect,
   useState,
 } from "react";
-import { To, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useNotification } from "../../atoms/snackbarNotificationState";
-import {
-  InjectiveConfig,
-  JunoConfig,
-  OraichainConfig,
-  OsmosisConfig,
-  TerraConfig,
-} from "../../configs/constants";
-import {
-  getAddressAndFunds,
-  SimulationJSON,
-  useCreateNewSimulateApp,
-  useSetupCwSimulateAppJson,
-  useStoreCode,
-} from "../../utils/simulationUtils";
-import FileUpload from "../upload/FileUpload";
-import T1Link from "../grid/T1Link";
-import simulationMetadataState from "../../atoms/simulationMetadataState";
-import { useAtom } from "jotai";
+import { Chains, defaults } from "../../configs/constants";
+import useSimulation from "../../hooks/useSimulation";
+import FileUpload, { extractByteCode } from "../upload/FileUpload";
 import FileUploadPaper from "../upload/FileUploadPaper";
+import { ReactComponent as OraiIcon } from "@public/orai.svg";
 import { ReactComponent as TerraIcon } from "@public/luna.svg";
 import { ReactComponent as InjectiveIcon } from "@public/injective.svg";
-import { ReactComponent as OsmosisIcon } from "@public/osmosis.svg";
-import { ReactComponent as OraichainIcon } from "@public/orai.svg";
 import JunoSvgIcon from "./JunoIcon";
-import { CWSimulateAppOptions } from "@terran-one/cw-simulate/dist/CWSimulateApp";
+import { ReactComponent as OsmosisIcon } from "@public/osmosis.svg";
+import axios from "axios";
 
-const enum IconEnum {
-  OraichainIcon = "Oraichain",
-  TerraIcon = "Terra",
-  InjectiveIcon = "Injective",
-  OsmosisIcon = "Osmosis",
-  JunoIcon = "Juno",
+export interface ISampleContract {
+  name: string;
+  id: string;
+  chain: string;
+  keys: string[];
 }
 
-const getChainConfig = (chain: string) => {
-  switch (chain) {
-    case IconEnum.OraichainIcon:
-      return OraichainConfig;
-    case IconEnum.TerraIcon:
-      return TerraConfig;
-    case IconEnum.InjectiveIcon:
-      return InjectiveConfig;
-    case IconEnum.OsmosisIcon:
-      return OsmosisConfig;
-    case IconEnum.JunoIcon:
-      return JunoConfig;
-    default:
-      return IconEnum.TerraIcon;
-  }
+const getChainConfig = (chain: Chains) => defaults.chains[chain];
+
+const SAMPLE_CONTRACTS: ISampleContract[] = [
+  {
+    name: "TerraSwap",
+    id: "terra-swap",
+    chain: "terra",
+    keys: [
+      "terraswap_factory.wasm",
+      "terraswap_pair.wasm",
+      "terraswap_router.wasm",
+      "terraswap_token.wasm",
+    ],
+  },
+  {
+    name: "WasmSwap",
+    id: "wasm-swap",
+    chain: "juno",
+    keys: [
+      "cw20-base.wasm",
+      "cw20-stake.wasm",
+      "wasmswap.wasm",
+      "cw-stake-external-rewards.wasm",
+    ],
+  },
+];
+
+interface SimulationFileType {
+  filename: string;
+  fileContent: Buffer | JSON;
+}
+
+const getSampleContractsForChain = (chain: string) => {
+  return SAMPLE_CONTRACTS.filter((c) => c.chain === chain).map((c) => c.name);
 };
+
 export default function WelcomeScreen() {
-  const [file, setFile] =
-    useState<{ filename: string; fileContent: Buffer | JSON } | undefined>(
-      undefined
-    );
+  const sim = useSimulation();
+  const [files, setFiles] = useState<SimulationFileType[]>([]);
   const setNotification = useNotification();
-  const [, setSimulationMetadata] = useAtom(simulationMetadataState);
   const navigate = useNavigate();
-  const createSimulateApp = useCreateNewSimulateApp();
-  const storeCode = useStoreCode();
-  const setupSimulationJSON = useSetupCwSimulateAppJson();
   const theme = useTheme();
-  const [svgIcon, setSvgIcon] = useState<IconEnum>(IconEnum.TerraIcon);
+  const [chain, setChain] = useState<Chains>("orai");
+  const [sampleContract, setSampleContract] = useState<string>("");
+  const handleLoadSampleContract = useCallback(async () => {
+    const contract = SAMPLE_CONTRACTS.find(
+      (c) => c.name === sampleContract && c.chain === chain
+    );
+    if (!contract) {
+      setNotification("Contract not found", { severity: "error" });
+      return;
+    }
+
+    let wasmFiles: SimulationFileType[] = [];
+    for (const key of contract.keys) {
+      try {
+        const response = await axios.get(`/r2/${contract.id}/${key}`, {
+          responseType: "arraybuffer",
+        });
+        const wasmFile = Buffer.from(extractByteCode(response.data));
+        const newFile = {
+          filename: key,
+          fileContent: wasmFile,
+        };
+        wasmFiles.push(newFile);
+      } catch (e) {
+        console.error(e);
+        setNotification("Failed to load sample contract", {
+          severity: "error",
+        });
+      }
+    }
+    setFiles(wasmFiles);
+  }, [sampleContract]);
 
   const onCreateNewEnvironment = useCallback(async () => {
-    if (!file) {
+    if (!files) {
       setNotification("Internal error. Please check logs.", {
         severity: "error",
       });
       return;
     }
-    if (file.filename.endsWith(".wasm")) {
-      const app = createSimulateApp(
-        getChainConfig(svgIcon) as CWSimulateAppOptions
-      );
-      storeCode(getAddressAndFunds(app.chainId), file);
-    } else if (file.filename.endsWith(".json")) {
-      const json = file.fileContent as unknown as SimulationJSON;
-      setupSimulationJSON(json);
+
+    if (files[0].filename.endsWith(".wasm")) {
+      const chainConfig = getChainConfig(chain);
+      sim.recreate(chainConfig);
+      sim.setBalance(chainConfig.sender, chainConfig.funds);
+      for (const file of files) {
+        sim.storeCode(
+          chainConfig.sender,
+          file.filename,
+          file.fileContent as Buffer,
+          chainConfig.funds
+        );
+      }
+    } else if (files[0].filename.endsWith(".json")) {
+      // TODO: rehydrate from JSON
+      // const json = files.fileContent as unknown;
+      sim.recreate(defaults.chains.orai);
     }
-  }, [file, storeCode, setNotification, setSimulationMetadata, svgIcon]);
+  }, [sim, files, chain]);
 
   const onAcceptFile = useCallback(
     async (filename: string, fileContent: Buffer | JSON) => {
-      setFile({ filename, fileContent });
+      setFiles((prevFiles) => [...prevFiles, { filename, fileContent }]);
     },
     []
   );
 
   const onClearFile = useCallback(() => {
-    setFile(undefined);
+    setFiles([]);
   }, []);
 
   useEffect(() => {
-    if (file) {
+    if (files.length > 0) {
       onCreateNewEnvironment().then((r) => {
         navigate("/accounts");
       });
     }
-  }, [file]);
-
-  const handleOnSvgIconClick = (event: any) => {
-    setSvgIcon(event.currentTarget.id as IconEnum);
-  };
+  }, [files]);
 
   return (
     <Grid container item flex={1} alignItems="center" justifyContent="center">
@@ -128,54 +172,95 @@ export default function WelcomeScreen() {
           border: `1px solid ${theme.palette.line}`,
           borderRadius: "10px",
           width: "60%",
+          py: 10,
         }}
         className="outerGrid"
       >
         <Grid item xs={12} sx={{ my: 4 }}>
           <Typography variant="h2" fontWeight={600} textAlign="center">
-            CosmWasm Simulator
+            CWSimulate
           </Typography>
         </Grid>
-        <Grid item xs={12}>
+        <Grid item xs={11} lg={7} md={8} sx={{ mb: 4, width: "60%" }}>
           <Typography variant="h6" textAlign="center">
             Select a configuration
           </Typography>
+          <FileUploadPaper sx={{ minHeight: 200 }}>
+            <WelcomeNavIcons>
+              <SvgIconWrapper
+                IconComponent={OraiIcon}
+                label="Orai"
+                isSelected={chain === "orai"}
+                onClick={() => {
+                  setChain("orai");
+                }}
+              />
+              <SvgIconWrapper
+                IconComponent={TerraIcon}
+                label="Terra"
+                isSelected={chain === "terra"}
+                onClick={() => {
+                  setChain("terra");
+                }}
+              />
+              <SvgIconWrapper
+                IconComponent={JunoSvgIcon}
+                label="Juno"
+                isSelected={chain === "juno"}
+                onClick={() => {
+                  setChain("juno");
+                }}
+              />
+              <SvgIconWrapper
+                IconComponent={OsmosisIcon}
+                label="Osmosis"
+                subLabel="Coming soon"
+              />
+              <SvgIconWrapper
+                IconComponent={InjectiveIcon}
+                label="Injective"
+                subLabel="Coming soon"
+              />
+            </WelcomeNavIcons>
+          </FileUploadPaper>
         </Grid>
-        <WelcomeNavIcons>
-          <SvgIconWrapper
-            icon={OraichainIcon}
-            name={IconEnum.OraichainIcon}
-            handleOnClick={handleOnSvgIconClick}
-            clickedIcon={svgIcon}
-          />
-          <SvgIconWrapper
-            icon={TerraIcon}
-            name={IconEnum.TerraIcon}
-            handleOnClick={handleOnSvgIconClick}
-            clickedIcon={svgIcon}
-          />
-          <SvgIconWrapper
-            icon={JunoSvgIcon}
-            name={IconEnum.JunoIcon}
-            handleOnClick={handleOnSvgIconClick}
-            clickedIcon={svgIcon}
-          />
-          <SvgIconWrapper
-            icon={OsmosisIcon}
-            name={IconEnum.OsmosisIcon}
-            handleOnClick={handleOnSvgIconClick}
-            clickedIcon={svgIcon}
-          />
-          <SvgIconWrapper
-            icon={InjectiveIcon}
-            name={IconEnum.InjectiveIcon}
-            handleOnClick={handleOnSvgIconClick}
-            clickedIcon={svgIcon}
-          />
-        </WelcomeNavIcons>
         <Grid item xs={11} lg={7} md={8} sx={{ mb: 4, width: "60%" }}>
-          <FileUploadPaper sx={{ minHeight: 280 }}>
-            <FileUpload onAccept={onAcceptFile} onClear={onClearFile} />
+          <FileUploadPaper sx={{ minHeight: 200 }}>
+            <Grid container direction="row" height="100%">
+              <Grid item sx={{ width: "50%" }}>
+                <FileUpload onAccept={onAcceptFile} onClear={onClearFile} />
+              </Grid>
+              <Grid
+                item
+                sx={{
+                  width: "50%",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  textAlign: "center",
+                  display: "flex",
+                  flexDirection: "column",
+                }}
+              >
+                <Typography textAlign="center" sx={{ fontWeight: "bold" }}>
+                  Load from sample contracts
+                </Typography>
+                <Autocomplete
+                  onInputChange={(_, value) => setSampleContract(value)}
+                  sx={{ width: "80%", mt: 2 }}
+                  renderInput={(params: AutocompleteRenderInputParams) => (
+                    <TextField {...params} label="Contract" />
+                  )}
+                  options={getSampleContractsForChain(chain)}
+                />
+                <Button
+                  variant={"contained"}
+                  sx={{ mt: 2 }}
+                  onClick={handleLoadSampleContract}
+                >
+                  Load
+                </Button>
+              </Grid>
+            </Grid>
           </FileUploadPaper>
         </Grid>
       </Grid>
@@ -184,56 +269,60 @@ export default function WelcomeScreen() {
 }
 
 interface ISvgIconWrapperProps {
-  icon: any;
+  IconComponent: ComponentType;
   fontSize?: number;
-  name: string;
-  clickedIcon: string;
+  label: string;
+  subLabel?: string;
+  isSelected?: boolean;
   backgroundColor?: string;
-  handleOnClick: (e: any) => void;
+  onClick?: (e: MouseEvent) => void;
 }
 
 const SvgIconWrapper = ({
-  icon,
+  IconComponent,
   fontSize,
-  name,
-  clickedIcon,
-  handleOnClick,
+  label,
+  subLabel,
+  isSelected,
+  onClick,
 }: ISvgIconWrapperProps) => {
   const theme = useTheme();
   return (
-    <Box
-      id={name}
-      sx={{
-        borderRadius: "50%",
-        display: "flex",
-        flexDirection: "column",
-      }}
-      onClick={(event) => handleOnClick(event)}
-    >
+    <>
       <Box
         sx={{
-          width: 64,
-          height: 64,
+          borderRadius: "50%",
           display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          bgcolor:
-            name === clickedIcon
+          flexDirection: "column",
+          opacity: onClick ? 1 : 0.5,
+          cursor: onClick ? "pointer" : "default",
+        }}
+        onClick={(event) => (onClick ? onClick(event) : undefined)}
+      >
+        <Box
+          sx={{
+            bgcolor: isSelected
               ? theme.palette.primary.light
               : theme.palette.background.default,
-          borderRadius: 2,
-        }}
-      >
-        <SvgIcon
-          component={icon}
-          style={{ fontSize: fontSize ?? 60 }}
-          inheritViewBox
-        />
+            borderRadius: 2,
+          }}
+        >
+          <SvgIcon
+            component={IconComponent}
+            style={{ fontSize: fontSize ?? 60 }}
+            inheritViewBox
+          />
+        </Box>
+        <Typography fontWeight={300} textAlign="center">
+          {label}
+        </Typography>
+        {subLabel && (
+          <Typography fontSize={10} textAlign="center">
+            {subLabel}
+          </Typography>
+        )}
       </Box>
-      <Typography fontWeight={300} textAlign="center">
-        {name}
-      </Typography>
-    </Box>
+    </>
   );
 };
 
@@ -252,30 +341,5 @@ function WelcomeNavIcons({ children }: PropsWithChildren) {
     >
       {children}
     </Grid>
-  );
-}
-
-interface INavIconProps extends PropsWithChildren {
-  to: To;
-  title?: string;
-  target?: HTMLAttributeAnchorTarget;
-}
-
-function NavIcon(props: INavIconProps) {
-  const { children, ...rest } = props;
-
-  return (
-    <T1Link {...rest}>
-      <Grid
-        container
-        direction="column"
-        alignItems="center"
-        sx={{
-          mx: 1,
-        }}
-      >
-        {children}
-      </Grid>
-    </T1Link>
   );
 }

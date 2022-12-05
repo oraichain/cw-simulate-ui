@@ -1,9 +1,7 @@
-import React, { Suspense, useContext, useState } from "react";
+import React, { Suspense, useState } from "react";
 import { Box, CircularProgress, Typography } from "@mui/material";
-import { fileUploadedState } from "../../atoms/fileUploadedState";
 import { useNotification } from "../../atoms/snackbarNotificationState";
 import { base64ToArrayBuffer } from "../../utils/fileUtils";
-import { useSetAtom } from "jotai";
 import { useDropzone } from 'react-dropzone';
 import AttachFileIcon from "@mui/icons-material/AttachFile";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
@@ -27,10 +25,9 @@ const FileUpload = ({
   onAccept,
   onClear
 }: IProps) => {
-  const setIsFileUploaded = useSetAtom(fileUploadedState);
   const [filename, setFilename] = useState('');
 
-  const text = dropzoneText || "Click to upload a simulation file or contract binary, or drop a file here";
+  const text = dropzoneText || "Upload or drop a .wasm contract binary here to get started";
   const setNotification = useNotification();
 
   const handleDropzoneClick = (event: any) => {
@@ -42,15 +39,7 @@ const FileUpload = ({
   const deleteFile = () => {
     onClear();
     setFilename('');
-    setIsFileUploaded(false);
-    setNotification('File removed');
   };
-
-  const setUploadSuccessState = (filename: string) => {
-    setIsFileUploaded(true);
-    setFilename(filename);
-    setNotification("File uploaded successfully");
-  }
 
   const handleOnFileDrop = (files: File[]) => {
     if (!files.length) {
@@ -86,14 +75,13 @@ const FileUpload = ({
 
         try {
           const buffer = Buffer.from(extractByteCode(contents));
+          setFilename(file.name);
           onAccept(file.name, buffer);
         } catch (ex: any) {
           setNotification(`Failed to extract & store WASM bytecode: ${ex.message ?? ex}`, {severity: "error"});
           console.error(ex);
           return;
         }
-
-        setUploadSuccessState(file.name);
       }
 
       reader.onerror = () => {
@@ -113,7 +101,7 @@ const FileUpload = ({
         //   return;
         // }
 
-        setUploadSuccessState(file.name);
+        setFilename(file.name);
         onAccept(file.name, json);
       };
 
@@ -127,17 +115,17 @@ const FileUpload = ({
     onDrop: handleOnFileDrop,
     accept: buildAcceptProp(variant),
   });
-  
+
   return (
     <Suspense fallback={<Fallback/>}>
       <div
-        {...getRootProps({ onClick: handleDropzoneClick })}
+        {...getRootProps({onClick: handleDropzoneClick})}
         style={{cursor: 'pointer', padding: '8px'}}
       >
         <input {...getInputProps()} />
         {
           filename
-          ? <>
+            ? <>
               <AttachFileIcon fontSize="large"/>
               <Box>
                 <Typography fontSize="24px">{filename}</Typography>
@@ -148,8 +136,8 @@ const FileUpload = ({
                 />
               </Box>
             </>
-          : <>
-              <Typography fontSize="24px">{text}</Typography>
+            : <>
+              <Typography fontSize="20px" sx={{fontWeight: 'bold'}}>{text}</Typography>
               <UploadFileIcon fontSize="large"/>
             </>
         }
@@ -186,7 +174,7 @@ function buildAcceptProp(variant: IProps['variant']): Record<string, string[]> {
   return Object.fromEntries(filetypes.map(t => [t, []]));
 }
 
-function extractByteCode(contents: string | ArrayBuffer): ArrayBuffer {
+export function extractByteCode(contents: string | ArrayBuffer): ArrayBuffer {
   if (typeof contents !== 'string')
     return contents;
   const prefixes = ['data:application/wasm;base64,', 'data:application/octet-stream;base64,'];

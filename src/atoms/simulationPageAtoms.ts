@@ -1,11 +1,8 @@
-import { atom, useAtom } from "jotai";
+import { atom } from "jotai";
 import {
-  ExecuteTraceLog,
-  ReplyTraceLog,
-  TraceLog,
   Coin,
   ExecuteEnv,
-  ContractResponse,
+  TraceLog,
 } from "@terran-one/cw-simulate/dist/types";
 
 export interface IRequest {
@@ -20,18 +17,19 @@ export interface IRequest {
 }
 
 export const blockState = atom<JSON | undefined>(undefined);
-export const compareStates = atom<{ state1: string; state2: string }>({
-  state1: "",
-  state2: "",
+export const compareStates = atom<{ state1: object | undefined; state2: object | undefined }>({
+  state1: undefined,
+  state2: undefined,
 });
-export const currentStateNumber = atom<number>(0);
-export const executeQueryTabState = atom<string>("execute");
-export const jsonErrorState = atom<string>("");
-export const responseState = atom<JSON | undefined>(undefined);
-export const stateResponseTabState =
-  atom<"summary" | "response" | "logs">("summary");
-export const stepTraceState = atom<ExecuteTraceLog | ReplyTraceLog | {}>({});
-export const traceState = atom<TraceLog[]>([]);
-export const stepRequestState = atom<IRequest | undefined>(undefined);
-export const stepResponseState =
-  atom<{ ok: ContractResponse } | { error: any } | undefined>(undefined);
+export const stepTraceState = atom<TraceLog | undefined>(undefined);
+export const activeStepState = atom<string>('');
+
+// ----- DERIVED ATOMS -----
+export const compareStringsState = atom(get => {
+  const { state1, state2 } = get(compareStates);
+  return [state1, state2];
+});
+export const isDiffOpenState = atom(get => {
+  const { state1, state2 } = get(compareStates);
+  return !!(state1 || state2);
+});

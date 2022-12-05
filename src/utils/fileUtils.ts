@@ -2,7 +2,6 @@ import { Validator } from 'jsonschema';
 import * as validSimulationSchema from './jsonSchema/validSimulationSchema.json';
 import * as validConfigSchema from './jsonSchema/validConfigSchema.json';
 import * as validAccountSchema from './jsonSchema/validAccountSchema.json';
-import type { ChainConfig } from './simulationUtils';
 
 /**
  * Read the upload wasm file and convert to ArrayBuffer
@@ -47,20 +46,26 @@ export const base64ToArrayBuffer = (base64: string): ArrayBuffer => {
   return bytes.buffer;
 }
 
+export const download = (content: BlobPart | BlobPart[], fileName: string, contentType: string) => {
+  const a = document.createElement('a');
+  const file = new Blob(Array.isArray(content) ? content : [content], {type: contentType});
+  a.href = URL.createObjectURL(file);
+  a.download = fileName;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 /**
  * Download simulation JSON file
  * @param content
  * @param fileName
  * @param contentType
  */
-export const downloadJSON = (content: string, fileName: string, contentType = 'application/json') => {
-  const a = document.createElement('a');
-  const file = new Blob([content], {type: contentType});
-  a.href = URL.createObjectURL(file);
-  a.download = fileName;
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
+export const downloadJSON = (content: string, fileName: string, contentType = 'application/json') =>
+  download(content, fileName, contentType);
+
+export const downloadWasm = (content: ArrayBuffer, fileName: string, contentType = 'application/wasm') =>
+  download(content, fileName, contentType);
 
 /**
  * Validate JSON with its schema
@@ -91,7 +96,7 @@ export const validateSimulationJSON = (simulationJSON: any): boolean => {
  * validate the config JSON with JSON schema
  * @param configJSON
  */
-export const validateConfigJSON = (configJSON: any): configJSON is ChainConfig => {
+export const validateConfigJSON = (configJSON: any): boolean => {
   return validateJSON(configJSON, validConfigSchema);
 }
 
