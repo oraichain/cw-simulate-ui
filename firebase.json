@@ -1,0 +1,9 @@
+{
+  "hosting": [
+    {
+      "target": "cw-sim",
+      "public": "build",
+      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+    }
+  ]
+}

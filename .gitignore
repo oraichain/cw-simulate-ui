@@ -19,3 +19,5 @@ yarn.lock
 
 # Misc local helpers & files
 tsconfig.tmp.json
+
+.firebase/
