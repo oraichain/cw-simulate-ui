@@ -86,13 +86,15 @@ function Query({ contractAddress, onHandleQuery }: IQuery) {
   };
 
   useEffect(() => {
+    if (payload) handleQuery();
+  }, [activeStep]);
+  useEffect(() => {
     setPayload("");
   }, [contractAddress]);
   return (
     <CollapsibleWidget
       title={`Query @${getFormattedStep(activeStep)}`}
       height={280}
-      collapsible={false}
       right={
         <BeautifyJSON
           onChange={setPayload}
