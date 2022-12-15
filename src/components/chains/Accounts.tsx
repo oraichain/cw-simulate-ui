@@ -25,13 +25,6 @@ import TableLayout from "./TableLayout";
 import Funds from "../Funds";
 import Address from "./Address";
 
-<<<<<<< HEAD
-const getDefaultAccount = (chainId: string) =>
-  Object.values(defaults.chains).find((config) => config.chainId === chainId) ??
-  defaults.chains.orai;
-
-=======
->>>>>>> 62d664b3f29627a62322a91a2d05b89a2a420680
 const Accounts = () => {
   const sim = useSimulation();
   const accounts = Object.entries(useAccounts(sim));
