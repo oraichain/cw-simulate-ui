@@ -16,7 +16,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import { Coin } from "@terran-one/cw-simulate/dist/types";
 import React, { useCallback, useRef, useState } from "react";
 import { useNotification } from "../../atoms/snackbarNotificationState";
-import { defaults } from "../../configs/constants";
+import { getDefaultAccount } from "../../utils/commonUtils";
 import { useAccounts } from "../../CWSimulationBridge";
 import useSimulation from "../../hooks/useSimulation";
 import { stringifyFunds } from "../../utils/typeUtils";
@@ -25,10 +25,13 @@ import TableLayout from "./TableLayout";
 import Funds from "../Funds";
 import Address from "./Address";
 
+<<<<<<< HEAD
 const getDefaultAccount = (chainId: string) =>
   Object.values(defaults.chains).find((config) => config.chainId === chainId) ??
   defaults.chains.orai;
 
+=======
+>>>>>>> 62d664b3f29627a62322a91a2d05b89a2a420680
 const Accounts = () => {
   const sim = useSimulation();
   const accounts = Object.entries(useAccounts(sim));
@@ -38,6 +41,7 @@ const Accounts = () => {
 
   const data = accounts.map(([address, balances]) => {
     return {
+      id: address,
       address: <Address address={address} long />,
       balances: balances.map((c: Coin) => `${c.amount} ${c.denom}`).join(", "),
     };
@@ -64,7 +68,6 @@ const Accounts = () => {
         <T1Container>
           <TableLayout
             rows={data}
-            keyField="address"
             columns={{
               address: "Account Address",
               balances: "Balances",

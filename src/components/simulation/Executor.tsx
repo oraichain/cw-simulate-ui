@@ -9,10 +9,13 @@ import { useAccounts } from "../../CWSimulationBridge";
 import { activeStepState } from "../../atoms/simulationPageAtoms";
 import { BeautifyJSON } from "./tabs/Common";
 import CollapsibleWidget from "../CollapsibleWidget";
+import AccountPopover from "./AccountPopover";
+import { Coin } from "@terran-one/cw-simulate/dist/types";
 
 interface IProps {
   contractAddress: string;
 }
+
 export const getFormattedStep = (step: string) => {
   const activeStepArr = step.split("-").map((ele) => Number(ele) + 1);
   let formattedStep = activeStepArr
@@ -26,10 +29,12 @@ export default function Executor({ contractAddress }: IProps) {
   const setNotification = useNotification();
   const [payload, setPayload] = useState("");
   const [isValid, setIsValid] = useState(true);
-  // TODO: customize sender & funds
-  const [sender, funds] = Object.entries(useAccounts(sim))[0] ?? [];
-  const activeStep = useAtomValue(activeStepState);
+  const accounts = useAccounts(sim);
+  const [account, setAccount] = useState(Object.keys(accounts)[0]);
+  const [funds, setFunds] = useState<Coin[]>([]);
+  const sender = account;
 
+  const activeStep = useAtomValue(activeStepState);
   const handleExecute = async () => {
     try {
       const res = await sim.execute(
@@ -56,10 +61,19 @@ export default function Executor({ contractAddress }: IProps) {
       title={"Execute"}
       height={280}
       right={
-        <BeautifyJSON
-          onChange={setPayload}
-          disabled={!payload.length || !isValid}
-        />
+        <>
+          <BeautifyJSON
+            onChange={setPayload}
+            disabled={!payload.length || !isValid}
+          />
+          <AccountPopover
+            changeAccount={setAccount}
+            accounts={accounts}
+            account={account}
+            funds={funds}
+            changeFunds={setFunds}
+          />
+        </>
       }
     >
       <Grid

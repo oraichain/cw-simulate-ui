@@ -19,7 +19,7 @@ import {
 } from "@mui/material";
 import type { CodeInfo, Coin } from "@terran-one/cw-simulate";
 import { useSetAtom } from "jotai";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useNotification } from "../../atoms/snackbarNotificationState";
 import { drawerSubMenuState } from "../../atoms/uiState";
@@ -29,9 +29,15 @@ import UploadModal from "../upload/UploadModal";
 import SubMenuHeader from "./SubMenuHeader";
 import T1MenuItem from "./T1MenuItem";
 import useSimulation from "../../hooks/useSimulation";
-import { useAccounts, useCodes } from "../../CWSimulationBridge";
+import {
+  compareDeep,
+  useAccounts,
+  useCode,
+  useCodes,
+} from "../../CWSimulationBridge";
 import { downloadWasm } from "../../utils/fileUtils";
 import Funds from "../Funds";
+import useDebounce from "../../hooks/useDebounce";
 
 export interface IContractsSubMenuProps {}
 
@@ -39,7 +45,7 @@ export default function ContractsSubMenu(props: IContractsSubMenuProps) {
   const sim = useSimulation();
 
   const [openUploadDialog, setOpenUploadDialog] = useState(false);
-  const codes = Object.values(useCodes(sim)).filter((c) => !c.hidden);
+  const codes = Object.entries(useCodes(sim)).filter(([, c]) => !c.hidden);
 
   return (
     <>
@@ -70,28 +76,31 @@ export default function ContractsSubMenu(props: IContractsSubMenuProps) {
         )}
       />
 
-      {Object.entries(codes).map(([codeId, info]) => (
-        <CodeMenuItem key={codeId} code={info} />
+      {codes.map(([codeId]) => (
+        <CodeMenuItem key={codeId} codeId={parseInt(codeId)} />
       ))}
     </>
   );
 }
 
 interface ICodeMenuItemProps {
-  code: CodeInfo;
+  codeId: number;
 }
 
-function CodeMenuItem({ code }: ICodeMenuItemProps) {
+function CodeMenuItem({ codeId }: ICodeMenuItemProps) {
+  const sim = useSimulation();
+  const code = useCode(sim, codeId)!;
+
   const [openInstantiate, setOpenInstantiate] = useState(false);
   const [openDelete, setOpenDelete] = useState(false);
 
   const download = useCallback(() => {
-    downloadWasm(code.wasmCode, code.name);
+    downloadWasm(code.wasmCode, code.name ?? "<unnamed code>");
   }, [code]);
 
   return (
     <T1MenuItem
-      label={`${code.codeId}:${code.name}`}
+      label={`${code.codeId}: ${code.name}`}
       textEllipsis
       options={({ close }) => [
         <MenuItem key="instantiate" onClick={() => setOpenInstantiate(true)}>
@@ -116,7 +125,7 @@ function CodeMenuItem({ code }: ICodeMenuItemProps) {
       optionsExtras={({ close }) => (
         <>
           <InstantiateDialog
-            code={code}
+            codeId={codeId}
             open={openInstantiate}
             onClose={() => {
               setOpenInstantiate(false);
@@ -124,7 +133,7 @@ function CodeMenuItem({ code }: ICodeMenuItemProps) {
             }}
           />
           <DeleteDialog
-            code={code}
+            codeId={codeId}
             open={openDelete}
             onClose={() => {
               setOpenDelete(false);
@@ -138,18 +147,18 @@ function CodeMenuItem({ code }: ICodeMenuItemProps) {
 }
 
 interface IDeleteDialogProps {
-  code: CodeInfo;
+  codeId: number;
   open: boolean;
   onClose: () => void;
 }
 
 function DeleteDialog(props: IDeleteDialogProps) {
-  const { code, open, onClose } = props;
+  const { codeId, open, onClose } = props;
   const sim = useSimulation();
   const setNotification = useNotification();
 
   const handleDeleteContract = () => {
-    sim.hideCode(code.codeId);
+    sim.hideCode(codeId);
     setNotification("Successfully deleted contract");
     onClose?.();
   };
@@ -171,14 +180,15 @@ function DeleteDialog(props: IDeleteDialogProps) {
 }
 
 interface IInstantiateDialogProps {
-  code: CodeInfo;
+  codeId: number;
   open: boolean;
 
   onClose(): void;
 }
 
 function InstantiateDialog(props: IInstantiateDialogProps) {
-  const { code, open, onClose } = props;
+  const { codeId, open, onClose } = props;
+
   const sim = useSimulation();
   const navigate = useNavigate();
   const setNotification = useNotification();
@@ -186,13 +196,23 @@ function InstantiateDialog(props: IInstantiateDialogProps) {
   const [funds, setFunds] = useState<Coin[]>([]);
   const [isFundsValid, setFundsValid] = useState(true);
   const [payload, setPayload] = useState("");
+  const [instancelabel, setInstanceLabel] = useState<string>("");
+  const ref = useRef<HTMLInputElement | null>();
   const placeholder = {
     count: 0,
   };
 
   const accounts = useAccounts(sim);
+  const code = useCode(sim, codeId)!;
   const [account, setAccount] = useState(Object.keys(accounts)[0]);
-
+  const handleLabelChange = useDebounce(
+    () => {
+      const val = ref.current?.value.trim();
+      setInstanceLabel(val ? val : "");
+    },
+    200,
+    []
+  );
   const handleInstantiate = useCallback(async () => {
     const instantiateMsg =
       payload.length === 0 ? placeholder : JSON.parse(payload);
@@ -210,7 +230,8 @@ function InstantiateDialog(props: IInstantiateDialogProps) {
         sender,
         code.codeId,
         instantiateMsg,
-        funds
+        funds,
+        instancelabel
       );
       navigate(`/instances/${contract.address}`);
       onClose();
@@ -242,7 +263,16 @@ function InstantiateDialog(props: IInstantiateDialogProps) {
           onValidate={setFundsValid}
           sx={{ mt: 2 }}
         />
+        <TextField
+          fullWidth
+          inputRef={ref}
+          defaultValue={instancelabel}
+          onChange={handleLabelChange}
+          label="Label"
+          sx={{ mt: 2 }}
+        />
       </DialogContent>
+
       <DialogContent>
         <DialogContentText>InstantiateMsg</DialogContentText>
         <T1Container sx={{ width: 400, height: 220 }}>
